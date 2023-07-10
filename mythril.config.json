@@ -1,0 +1,7 @@
+{
+  "remappings": [
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "hardhat/=node_modules/hardhat/",
+    "forge-std/=lib/forge-std/src/"
+  ]
+}

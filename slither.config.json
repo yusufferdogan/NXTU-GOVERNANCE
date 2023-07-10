@@ -1,0 +1,8 @@
+{
+  "solc_remaps": [
+    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "hardhat/=node_modules/hardhat/",
+    "forge-std/=lib/forge-std/src/"
+  ],
+  "filter_paths": "node_modules,forge-std/"
+}
