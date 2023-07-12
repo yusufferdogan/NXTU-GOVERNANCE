@@ -47,9 +47,9 @@ contract Stake is IStake, Ownable {
         uint256 userReward = (amount * baseApr * lockedTime) /
             (dominator * 365 days);
 
-        if (totalReward < userReward) revert InsufficientReward();
+        if (tokenAprReward < userReward) revert InsufficientReward();
 
-        totalReward -= userReward;
+        tokenAprReward -= userReward;
 
         userData[msg.sender].deposits.push(
             Deposit({

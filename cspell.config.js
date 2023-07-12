@@ -29,6 +29,7 @@ module.exports = {
     'foundryup',
     'hcoverage',
     'NXTU',
+    'INXTU',
   ],
 
   ignoreWords: [],

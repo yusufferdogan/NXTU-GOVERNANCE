@@ -4,10 +4,15 @@ pragma solidity ^0.8.17;
 import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
-contract Governance {
+interface INXTU is IERC20 {
+    function burnFrom(address account, uint256 amount) external;
+}
+
+contract Governance is Ownable {
     error LessThanMinAmount();
     error ProjectDoesNotExist();
     error AlreadyVoted();
+    error VoteEnded();
 
     event ProjectCreated(
         uint256 indexed id,
@@ -24,7 +29,7 @@ contract Governance {
         bool votedFor
     );
 
-    IERC20 public immutable token;
+    INXTU public immutable token;
     uint256 public projectCount;
     uint256 public minAmountToVote = 1 * 10**8;
 
@@ -40,7 +45,7 @@ contract Governance {
     }
 
     constructor(address _token) {
-        token = IERC20(_token);
+        token = INXTU(_token);
     }
 
     mapping(uint256 => Project) public projects;
@@ -55,7 +60,7 @@ contract Governance {
         uint256 _voteEndDate
     ) external onlyOwner {
         projects[++projectCount] = Project({
-            name: name,
+            name: _name,
             description: _description,
             url: _url,
             apr: _apr,
