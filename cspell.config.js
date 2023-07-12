@@ -28,6 +28,7 @@ module.exports = {
     'nomicfoundation',
     'foundryup',
     'hcoverage',
+    'NXTU',
   ],
 
   ignoreWords: [],
