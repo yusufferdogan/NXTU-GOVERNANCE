@@ -27,4 +27,6 @@ interface IStake {
     error AmountCantBeZero();
     error AlreadyApproved();
     error StakeIsEnded();
+    error NotApproved();
+    error ProjectIsNotPassedTheVoting();
 }

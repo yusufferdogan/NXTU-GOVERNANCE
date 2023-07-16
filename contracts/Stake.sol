@@ -47,7 +47,8 @@ contract Stake is IStake, Ownable {
     function stake(uint256 projectId, uint256 amount) external {
         if (amount == 0) revert AmountCantBeZero();
 
-        if (!governance.isProjectApproved(projectId)) revert AlreadyApproved();
+        if (!governance.isProjectPassedTheVoting(projectId))
+            revert ProjectIsNotPassedTheVoting();
 
         (uint256 apr, uint256 lockedTime, uint256 stakeEndDate) = governance
             .getProjectStakeData(projectId);

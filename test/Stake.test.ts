@@ -47,20 +47,12 @@ describe(name, () => {
     stake = await factory2.deploy(token.address, governance.address);
   });
 
-  // mint tests
-  // it('should MINT successfully', async () => {
-  //   await ethers.provider.send('evm_increaseTime', [1000]);
-
-  //   await expect(
-  //     contract.mint(addresses[0].address, { value: String(MINT_PRICE) })
-  //   )
-  //     .to.emit(contract, 'Transfer')
-  //     .withArgs(constants.AddressZero, addresses[0].address, 0);
-
-  //   await ethers.provider.send('evm_increaseTime', [-1000]);
-  // });
-  it('should ProjectApplied', async () => {
+  it('stake + gov tests', async () => {
     const depositAmount = 1000 * 10 ** 8;
+
+    await expect(
+      governance.voteProject(1, true, depositAmount)
+    ).to.revertedWithCustomError(governance, 'NotApproved');
 
     const now = Math.floor(+new Date() / 1000);
 
@@ -68,13 +60,26 @@ describe(name, () => {
     await token.approve(stake.address, constants.MaxUint256);
     await stake.addAprReward(BigNumber.from(100000 * 10 ** 8));
 
+    await expect(
+      governance.approveProject(
+        1,
+        'name',
+        'desc',
+        'url',
+        24_000, //apr
+        365 * days, // lockedTime
+        now + 10 * days, // vote end time
+        now + 40 * days // stake end time
+      )
+    ).to.revertedWithCustomError(governance, 'DidNotApplied');
+
     await expect(governance.applyProject())
       .to.emit(governance, 'ProjectApplied')
       .withArgs(1);
 
     await expect(stake.stake(1, depositAmount)).to.revertedWithCustomError(
       stake,
-      'AlreadyApproved'
+      'ProjectIsNotPassedTheVoting'
     );
 
     await expect(
@@ -100,11 +105,38 @@ describe(name, () => {
         now + 10 * days, // vote end time
         now + 40 * days // stake end time
       );
+
+    await expect(
+      governance.approveProject(
+        1,
+        'name',
+        'desc',
+        'url',
+        24_000, //apr
+        365 * days, // lockedTime
+        now + 10 * days, // vote end time
+        now + 40 * days // stake end time
+      )
+    ).to.revertedWithCustomError(governance, 'AlreadyApproved');
+
+    //-----------------------------------------------------------
+
+    await expect(governance.voteProject(1, true, 0)).to.revertedWithCustomError(
+      governance,
+      'LessThanMinAmount'
+    );
+
     const minAmountToVote = await governance.minAmountToVote();
 
     await expect(governance.voteProject(1, true, minAmountToVote))
       .to.emit(governance, 'ProjectVoted')
       .withArgs(1, owner.address, true);
+
+    await expect(
+      governance.voteProject(1, true, minAmountToVote)
+    ).to.revertedWithCustomError(governance, 'AlreadyVoted');
+
+    //-----------------------------------------------------------
 
     await expect(stake.unstake(1)).to.revertedWithCustomError(
       stake,
@@ -112,6 +144,20 @@ describe(name, () => {
     );
 
     await ethers.provider.send('evm_increaseTime', [10 * days + 1]);
+
+    //************* */
+
+    await token.mint(addresses[0].address, minAmountToVote);
+
+    await token
+      .connect(addresses[0])
+      .approve(governance.address, constants.MaxUint256);
+
+    await expect(
+      governance.connect(addresses[0]).voteProject(1, false, depositAmount)
+    ).to.revertedWithCustomError(governance, 'VoteEnded');
+
+    //************* */
 
     await expect(stake.stake(1, 0)).to.revertedWithCustomError(
       stake,

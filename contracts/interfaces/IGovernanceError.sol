@@ -8,6 +8,7 @@ interface IGovernanceError {
     error AlreadyVoted();
     error VoteEnded();
     error AlreadyApproved();
+    error NotApproved();
     error DidNotApplied();
 
     event ProjectApplied(uint256 indexed id);
