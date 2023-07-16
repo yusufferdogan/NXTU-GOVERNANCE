@@ -40,7 +40,12 @@ contract Governance is Ownable, IGovernanceError {
     mapping(uint256 => Project) public projects;
     mapping(address => mapping(uint256 => bool)) public isVoted;
 
-    function isProjectApproved(uint256 projectId) external view returns (bool) {
+    // function that returns true if the project is passed the vote
+    function isProjectPassedTheVoting(uint256 projectId)
+        external
+        view
+        returns (bool)
+    {
         Project memory project = projects[projectId];
         // invalid project
         if (project.lockedTime == 0) return false;
@@ -117,7 +122,7 @@ contract Governance is Ownable, IGovernanceError {
     ) external {
         if (amount < minAmountToVote) revert LessThanMinAmount();
         if (isVoted[msg.sender][projectId]) revert AlreadyVoted();
-        if (!projects[projectId].approved) revert AlreadyApproved();
+        if (!projects[projectId].approved) revert NotApproved();
         // solhint-disable-next-line not-rely-on-time
         if (block.timestamp > projects[projectId].voteEndDate)
             revert VoteEnded();

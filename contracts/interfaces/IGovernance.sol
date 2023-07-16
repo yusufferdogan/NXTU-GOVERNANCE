@@ -26,7 +26,10 @@ interface IGovernance {
             uint256 stakeEndDate
         );
 
-    function isProjectApproved(uint256 projectId) external view returns (bool);
+    function isProjectPassedTheVoting(uint256 projectId)
+        external
+        view
+        returns (bool);
 
     function isVoted(address, uint256) external view returns (bool);
 
