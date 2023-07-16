@@ -1,15 +1,16 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.17;
+pragma solidity ^0.8.18;
 
 import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
 import "./interfaces/IStake.sol";
+import "./interfaces/IGovernance.sol";
 
 contract Stake is IStake, Ownable {
     IERC20 public immutable token;
-    uint256 public lockedTime = 365 days / 2;
-    uint256 public baseApr = 24_000;
+    IGovernance public immutable governance;
+
     uint256 public dominator = 100_000;
     uint256 public tokenAprReward;
 
@@ -19,10 +20,12 @@ contract Stake is IStake, Ownable {
         Deposit[] deposits;
     }
 
-    mapping(address => UserData) public userData;
+    //user => project => userData
+    mapping(address => mapping(uint256 => UserData)) public userData;
 
-    constructor(address _token) {
+    constructor(address _token, address _governance) {
         token = IERC20(_token);
+        governance = IGovernance(_governance);
     }
 
     //method for adding apr rewards for stakers
@@ -41,17 +44,24 @@ contract Stake is IStake, Ownable {
         if (!success) revert TransferError();
     }
 
-    function stake(uint256 amount) external {
+    function stake(uint256 projectId, uint256 amount) external {
         if (amount == 0) revert AmountCantBeZero();
 
-        uint256 userReward = (amount * baseApr * lockedTime) /
+        if (!governance.isProjectApproved(projectId)) revert AlreadyApproved();
+
+        (uint256 apr, uint256 lockedTime, uint256 stakeEndDate) = governance
+            .getProjectStakeData(projectId);
+
+        if (block.timestamp > stakeEndDate) revert StakeIsEnded();
+
+        uint256 userReward = (amount * apr * lockedTime) /
             (dominator * 365 days);
 
         if (tokenAprReward < userReward) revert InsufficientReward();
 
         tokenAprReward -= userReward;
 
-        userData[msg.sender].deposits.push(
+        userData[msg.sender][projectId].deposits.push(
             Deposit({
                 // solhint-disable-next-line not-rely-on-time
                 unlockTime: block.timestamp + lockedTime,
@@ -60,15 +70,15 @@ contract Stake is IStake, Ownable {
             })
         );
 
-        emit Staked(msg.sender, amount);
+        emit Staked(projectId, msg.sender, amount);
 
         bool success = token.transferFrom(msg.sender, address(this), amount);
         if (!success) revert TransferError();
     }
 
     //unstake users stake, starts from users first stake to last stake
-    function unstake() external {
-        UserData storage user = userData[msg.sender];
+    function unstake(uint256 projectId) external {
+        UserData storage user = userData[msg.sender][projectId];
 
         if (user.deposits.length - user.front == 0) revert NoDeposit();
         Deposit memory unstakedDeposit = user.deposits[user.front];
@@ -83,16 +93,8 @@ contract Stake is IStake, Ownable {
         delete user.deposits[user.front];
         user.front++;
 
-        emit Unstaked(msg.sender, withdrawAmount);
+        emit Unstaked(projectId, msg.sender, withdrawAmount);
         bool success = token.transfer(msg.sender, withdrawAmount);
         if (!success) revert TransferError();
-    }
-
-    function setLockedTime(uint256 _lockedTime) external onlyOwner {
-        lockedTime = _lockedTime;
-    }
-
-    function setBaseApr(uint256 _baseApr) external onlyOwner {
-        baseApr = _baseApr;
     }
 }
