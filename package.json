@@ -13,6 +13,9 @@
     "prepare": "foundryup && forge install && forge install foundry-rs/forge-std && forge install OpenZeppelin/openzeppelin-contracts"
   },
   "license": "Apache-2.0",
+  "engines": {
+    "node": "20.x"
+  },
   "devDependencies": {
     "hardhat-preprocessor": "^0.1.4",
     "@nomicfoundation/hardhat-chai-matchers": "^1.0.2",
