@@ -1,47 +1,36 @@
-// SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.17;
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.18;
 
-import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import "lib/openzeppelin-contracts/contracts/access/Ownable.sol";
+import "./interfaces/IGovernanceError.sol";
+// import "forge-std/console.sol";
+import "lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
 interface INXTU is IERC20 {
     function burnFrom(address account, uint256 amount) external;
+
+    function burn(uint256 amount) external;
 }
 
-contract Governance is Ownable {
-    error LessThanMinAmount();
-    error ProjectDoesNotExist();
-    error AlreadyVoted();
-    error VoteEnded();
-
-    event ProjectCreated(
-        uint256 indexed id,
-        string name,
-        string description,
-        string url,
-        uint256 voteEndDate,
-        uint256 unstakeDate,
-        uint256 apr
-    );
-    event ProjectVoted(
-        uint256 indexed projectId,
-        address indexed user,
-        bool votedFor
-    );
-
+contract Governance is Ownable, IGovernanceError {
     INXTU public immutable token;
     uint256 public projectCount;
     uint256 public minAmountToVote = 1 * 10**8;
+    uint256 public amountToApply = 500 * 10**8;
 
     struct Project {
         string name;
         string description;
         string url;
         uint256 apr;
-        uint256 unstakeDate;
+        //unstakeTimeStamp = voteEndDate + lockedTime
+        uint256 lockedTime;
         uint256 voteEndDate;
         uint256 votedFor;
         uint256 votedAgainst;
+        uint256 stakeEndDate;
+        bool applied;
+        bool approved;
     }
 
     constructor(address _token) {
@@ -51,32 +40,73 @@ contract Governance is Ownable {
     mapping(uint256 => Project) public projects;
     mapping(address => mapping(uint256 => bool)) public isVoted;
 
-    function addProject(
+    function isProjectApproved(uint256 projectId) external view returns (bool) {
+        Project memory project = projects[projectId];
+        // invalid project
+        if (project.lockedTime == 0) return false;
+        //check voting ends
+        if (block.timestamp < project.voteEndDate) return false;
+        //which vote is bigger
+        if (project.votedFor > project.votedAgainst) return true;
+        else return false;
+    }
+
+    function getProjectStakeData(uint256 projectId)
+        external
+        view
+        returns (
+            uint256 apr,
+            uint256 lockedTime,
+            uint256 stakeEndDate
+        )
+    {
+        Project memory project = projects[projectId];
+        apr = project.apr;
+        lockedTime = project.lockedTime;
+        stakeEndDate = project.stakeEndDate;
+    }
+
+    function applyProject() external {
+        projects[++projectCount].applied = true;
+        token.burnFrom(msg.sender, amountToApply);
+        emit ProjectApplied(projectCount);
+    }
+
+    function approveProject(
+        uint256 projectId,
         string calldata _name,
         string calldata _description,
         string calldata _url,
         uint256 _apr,
-        uint256 _unstakeDate,
-        uint256 _voteEndDate
+        uint256 _lockedTime,
+        uint256 _voteEndDate,
+        uint256 _stakeEndDate
     ) external onlyOwner {
-        projects[++projectCount] = Project({
+        if (!projects[projectId].applied) revert DidNotApplied();
+        if (projects[projectId].approved) revert AlreadyApproved();
+
+        projects[projectId] = Project({
             name: _name,
             description: _description,
             url: _url,
             apr: _apr,
-            unstakeDate: _unstakeDate,
-            voteEndDate: _voteEndDate,
+            lockedTime: _lockedTime,
             votedFor: 0,
-            votedAgainst: 0
+            votedAgainst: 0,
+            applied: true,
+            approved: true,
+            stakeEndDate: _stakeEndDate,
+            voteEndDate: _voteEndDate
         });
-        emit ProjectCreated(
-            projectCount,
+        emit ProjectApproved(
+            projectId,
             _name,
             _description,
             _url,
+            _apr,
+            _lockedTime,
             _voteEndDate,
-            _unstakeDate,
-            _apr
+            _stakeEndDate
         );
     }
 
@@ -86,10 +116,10 @@ contract Governance is Ownable {
         uint256 amount
     ) external {
         if (amount < minAmountToVote) revert LessThanMinAmount();
-        if (projectId > projectCount) revert ProjectDoesNotExist();
         if (isVoted[msg.sender][projectId]) revert AlreadyVoted();
+        if (!projects[projectId].approved) revert AlreadyApproved();
         // solhint-disable-next-line not-rely-on-time
-        if (projects[projectId].voteEndDate > block.timestamp)
+        if (block.timestamp > projects[projectId].voteEndDate)
             revert VoteEnded();
 
         isVoted[msg.sender][projectId] = true;
@@ -97,6 +127,8 @@ contract Governance is Ownable {
         Project storage project = projects[projectId];
         if (voteFor) project.votedFor++;
         else project.votedAgainst++;
+
+        emit ProjectVoted(projectId, msg.sender, voteFor);
 
         token.burnFrom(msg.sender, amount);
     }
