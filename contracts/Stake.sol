@@ -3,15 +3,16 @@ pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
 
 import "./interfaces/IStake.sol";
 import "./interfaces/IGovernance.sol";
 
-contract Stake is IStake, Ownable {
+contract Stake is IStake, Ownable, Pausable {
     IERC20 public immutable token;
     IGovernance public immutable governance;
 
-    uint256 public dominator = 100_000;
+    uint256 public constant DOMINATOR = 100_000;
     uint256 public tokenAprReward;
 
     struct UserData {
@@ -44,7 +45,7 @@ contract Stake is IStake, Ownable {
         if (!success) revert TransferError();
     }
 
-    function stake(uint256 projectId, uint256 amount) external {
+    function stake(uint256 projectId, uint256 amount) external whenNotPaused {
         if (amount == 0) revert AmountCantBeZero();
 
         if (!governance.isProjectPassedTheVoting(projectId))
@@ -56,7 +57,7 @@ contract Stake is IStake, Ownable {
         if (block.timestamp > stakeEndDate) revert StakeIsEnded();
 
         uint256 userReward = (amount * apr * lockedTime) /
-            (dominator * 365 days);
+            (DOMINATOR * 365 days);
 
         if (tokenAprReward < userReward) revert InsufficientReward();
 
@@ -64,7 +65,6 @@ contract Stake is IStake, Ownable {
 
         userData[msg.sender][projectId].deposits.push(
             Deposit({
-                // solhint-disable-next-line not-rely-on-time
                 unlockTime: block.timestamp + lockedTime,
                 amount: amount,
                 reward: userReward
@@ -84,7 +84,6 @@ contract Stake is IStake, Ownable {
         if (user.deposits.length - user.front == 0) revert NoDeposit();
         Deposit memory unstakedDeposit = user.deposits[user.front];
 
-        // solhint-disable-next-line not-rely-on-time
         if (unstakedDeposit.unlockTime > block.timestamp)
             revert StakeIsLocked();
 
@@ -97,5 +96,13 @@ contract Stake is IStake, Ownable {
         emit Unstaked(projectId, msg.sender, withdrawAmount);
         bool success = token.transfer(msg.sender, withdrawAmount);
         if (!success) revert TransferError();
+    }
+
+    function pause() public onlyOwner {
+        _pause();
+    }
+
+    function unpause() public onlyOwner {
+        _unpause();
     }
 }
