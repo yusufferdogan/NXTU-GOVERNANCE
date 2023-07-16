@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
-
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/Pausable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./interfaces/IGovernanceError.sol";
 
@@ -11,8 +11,12 @@ interface INXTU is IERC20 {
     function burn(uint256 amount) external;
 }
 
-contract Governance is Ownable, IGovernanceError {
+contract Governance is AccessControl, IGovernanceError, Pausable {
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant APPROVER_ROLE = keccak256("APPROVER_ROLE");
+
     INXTU public immutable token;
+    //shows all applied or approved projects count
     uint256 public projectCount;
     uint256 public minAmountToVote = 1 * 10**8;
     uint256 public amountToApply = 500 * 10**8;
@@ -34,6 +38,9 @@ contract Governance is Ownable, IGovernanceError {
 
     constructor(address _token) {
         token = INXTU(_token);
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(PAUSER_ROLE, msg.sender);
+        _grantRole(APPROVER_ROLE, msg.sender);
     }
 
     mapping(uint256 => Project) public projects;
@@ -70,12 +77,14 @@ contract Governance is Ownable, IGovernanceError {
         stakeEndDate = project.stakeEndDate;
     }
 
+    // apply your project via burning tokens
     function applyProject() external {
         projects[++projectCount].applied = true;
         token.burnFrom(msg.sender, amountToApply);
         emit ProjectApplied(projectCount);
     }
 
+    //owner approves the applied projects
     function approveProject(
         uint256 projectId,
         string calldata _name,
@@ -85,7 +94,7 @@ contract Governance is Ownable, IGovernanceError {
         uint256 _lockedTime,
         uint256 _voteEndDate,
         uint256 _stakeEndDate
-    ) external onlyOwner {
+    ) external onlyRole(APPROVER_ROLE) {
         if (!projects[projectId].applied) revert DidNotApplied();
         if (projects[projectId].approved) revert AlreadyApproved();
 
@@ -114,15 +123,18 @@ contract Governance is Ownable, IGovernanceError {
         );
     }
 
+    // users can vote projects , if they want that this project should pass the voting
+    // voteFor = true else false
+    // projectId specifies the projectID
+    // amount can be any amount which is more than or equal to minVoteAmount
     function voteProject(
         uint256 projectId,
         bool voteFor,
         uint256 amount
-    ) external {
+    ) external whenNotPaused {
         if (amount < minAmountToVote) revert LessThanMinAmount();
         if (isVoted[msg.sender][projectId]) revert AlreadyVoted();
         if (!projects[projectId].approved) revert NotApproved();
-        // solhint-disable-next-line not-rely-on-time
         if (block.timestamp > projects[projectId].voteEndDate)
             revert VoteEnded();
 
@@ -135,5 +147,27 @@ contract Governance is Ownable, IGovernanceError {
         emit ProjectVoted(projectId, msg.sender, voteFor);
 
         token.burnFrom(msg.sender, amount);
+    }
+
+    function setMinAmountToVote(uint256 amount)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        minAmountToVote = amount;
+    }
+
+    function setAmountToApply(uint256 amount)
+        external
+        onlyRole(DEFAULT_ADMIN_ROLE)
+    {
+        amountToApply = amount;
+    }
+
+    function pause() public onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    function unpause() public onlyRole(PAUSER_ROLE) {
+        _unpause();
     }
 }
