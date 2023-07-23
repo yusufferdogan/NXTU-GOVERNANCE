@@ -14,13 +14,12 @@ interface IGovernanceError {
     event ProjectApplied(uint256 indexed id);
     event ProjectApproved(
         uint256 indexed id,
-        string name,
-        string description,
-        string url,
         uint256 apr,
         uint256 lockedTime,
         uint256 voteEndDate,
-        uint256 stakeEndDate
+        uint256 stakeEndDate,
+        uint256 refPercantage,
+        uint256 amountToBeCollect
     );
     event ProjectVoted(
         uint256 indexed projectId,
