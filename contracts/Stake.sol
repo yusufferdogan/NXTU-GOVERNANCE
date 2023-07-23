@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: UNLICENSED
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -24,9 +24,28 @@ contract Stake is IStake, Ownable, Pausable {
     //user => project => userData
     mapping(address => mapping(uint256 => UserData)) public userData;
 
+    //projectId => total collectedAmount
+    mapping(uint256 => uint256) public totalCollected;
+
+    mapping(address => address) public referers;
+
     constructor(address _token, address _governance) {
         token = IERC20(_token);
         governance = IGovernance(_governance);
+        //deployer has referer so peoples can referenced by deployer
+        referers[msg.sender] = address(this);
+    }
+
+    function isProjectFailedToCollectAmount(uint256 projectId)
+        public
+        view
+        returns (bool)
+    {
+        (uint256 timetampToCollectUntil, uint256 amountToBeCollect) = governance
+            .getProjectCollectData(projectId);
+
+        return ((block.timestamp > timetampToCollectUntil) &&
+            (totalCollected[projectId] < amountToBeCollect));
     }
 
     //method for adding apr rewards for stakers
@@ -45,40 +64,79 @@ contract Stake is IStake, Ownable, Pausable {
         if (!success) revert TransferError();
     }
 
-    function stake(uint256 projectId, uint256 amount) external whenNotPaused {
-        if (amount == 0) revert AmountCantBeZero();
+    function stake(
+        uint256 _projectId,
+        uint256 _amount,
+        address _referer
+    ) external whenNotPaused {
+        if (_amount == 0) revert AmountCantBeZero();
 
-        if (!governance.isProjectPassedTheVoting(projectId))
+        uint256 refPercantage = governance.getProjectRefPercantage(_projectId);
+
+        //project want ref and user does not have ref
+        if (refPercantage != 0 && referers[msg.sender] == address(0)) {
+            if (_referer == address(0)) revert CantStakeWithoutRef();
+            if (_referer == msg.sender) revert CantRefToYourself();
+            // if your referer has referer means your referer is valid
+            if (referers[_referer] == address(0)) revert RefererIsNoStaker();
+            //assign parameter as msg.sender's referer
+            referers[msg.sender] = _referer;
+        }
+
+        if (!governance.isProjectPassedTheVoting(_projectId))
             revert ProjectIsNotPassedTheVoting();
 
-        (uint256 apr, uint256 lockedTime, uint256 stakeEndDate) = governance
-            .getProjectStakeData(projectId);
+        (
+            uint256 apr,
+            uint256 lockedTime,
+            uint256 stakeEndDate,
+            uint256 amountToBeCollect
+        ) = governance.getProjectStakeData(_projectId);
 
         if (block.timestamp > stakeEndDate) revert StakeIsEnded();
 
-        uint256 userReward = (amount * apr * lockedTime) /
+        //if project ref pool is fulled
+        if (_amount + totalCollected[_projectId] > amountToBeCollect)
+            revert ProjectCollectCompleted();
+
+        uint256 userReward = (_amount * apr * lockedTime) /
             (DOMINATOR * 365 days);
 
-        if (tokenAprReward < userReward) revert InsufficientReward();
+        uint256 refReward = (_amount * refPercantage) / DOMINATOR;
 
-        tokenAprReward -= userReward;
+        uint256 totalReward = userReward + refReward;
 
-        userData[msg.sender][projectId].deposits.push(
+        if (tokenAprReward < totalReward) revert InsufficientReward();
+
+        tokenAprReward -= totalReward;
+
+        userData[msg.sender][_projectId].deposits.push(
             Deposit({
                 unlockTime: block.timestamp + lockedTime,
-                amount: amount,
+                amount: _amount,
                 reward: userReward
             })
         );
 
-        emit Staked(projectId, msg.sender, amount);
+        totalCollected[_projectId] += _amount;
 
-        bool success = token.transferFrom(msg.sender, address(this), amount);
+        emit Staked(_projectId, msg.sender, _amount);
+
+        if (refPercantage != 0) {
+            bool _success = token.transfer(referers[msg.sender], refReward);
+            if (!_success) revert TransferError();
+        }
+
+        bool success = token.transferFrom(msg.sender, address(this), _amount);
         if (!success) revert TransferError();
     }
 
     //unstake users stake, starts from users first stake to last stake
     function unstake(uint256 projectId) external {
+        // if project failed you have to
+        if (isProjectFailedToCollectAmount(projectId))
+            revert ProjectIsFailedToCollectAmount();
+
         UserData storage user = userData[msg.sender][projectId];
 
         if (user.deposits.length - user.front == 0) revert NoDeposit();
@@ -94,6 +152,27 @@ contract Stake is IStake, Ownable, Pausable {
         user.front++;
 
         emit Unstaked(projectId, msg.sender, withdrawAmount);
+        bool success = token.transfer(msg.sender, withdrawAmount);
+        if (!success) revert TransferError();
+    }
+
+    function refund(uint256 projectId) external {
+        if (!isProjectFailedToCollectAmount(projectId))
+            revert ProjectIsNotFailedToCollectAmount();
+
+        UserData storage user = userData[msg.sender][projectId];
+
+        if (user.deposits.length - user.front == 0) revert NoDeposit();
+        Deposit memory unstakedDeposit = user.deposits[user.front];
+
+        uint256 withdrawAmount = unstakedDeposit.amount;
+
+        tokenAprReward += unstakedDeposit.reward;
+
+        delete user.deposits[user.front];
+        user.front++;
+
+        emit Refund(projectId, msg.sender, withdrawAmount);
         bool success = token.transfer(msg.sender, withdrawAmount);
         if (!success) revert TransferError();
     }
