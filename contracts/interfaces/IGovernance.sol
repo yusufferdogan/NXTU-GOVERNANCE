@@ -17,14 +17,25 @@ interface IGovernance {
         uint256 _voteEndDate
     ) external;
 
+    function getProjectCollectData(uint256 projectId)
+        external
+        view
+        returns (uint256 timetampToCollectUntil, uint256 amountToBeCollect);
+
     function getProjectStakeData(uint256 projectId)
         external
         view
         returns (
             uint256 apr,
             uint256 lockedTime,
-            uint256 stakeEndDate
+            uint256 stakeEndDate,
+            uint256 amountToBeCollect
         );
+
+    function getProjectRefPercantage(uint256 projectId)
+        external
+        view
+        returns (uint256);
 
     function isProjectPassedTheVoting(uint256 projectId)
         external
@@ -47,11 +58,15 @@ interface IGovernance {
             string memory description,
             string memory url,
             uint256 apr,
+            //unstakeTimeStamp = voteEndDate + lockedTime
             uint256 lockedTime,
-            uint256 unstakeDate,
             uint256 voteEndDate,
             uint256 votedFor,
             uint256 votedAgainst,
+            uint256 stakeEndDate,
+            uint256 refPercantage,
+            uint256 amountToBeCollect,
+            uint256 timetampToCollectUntil,
             bool applied,
             bool approved
         );
