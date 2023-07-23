@@ -3,6 +3,8 @@
 pragma solidity ^0.8.18;
 
 interface IStake {
+    function totalCollected(uint256 projectId) external view returns (uint256);
+
     struct Deposit {
         uint256 unlockTime;
         uint256 amount;
@@ -19,6 +21,11 @@ interface IStake {
         address indexed user,
         uint256 amount
     );
+    event Refund(
+        uint256 indexed projectId,
+        address indexed user,
+        uint256 amount
+    );
 
     error TransferError();
     error NoDeposit();
@@ -29,4 +36,10 @@ interface IStake {
     error StakeIsEnded();
     error NotApproved();
     error ProjectIsNotPassedTheVoting();
+    error ProjectIsFailedToCollectAmount();
+    error ProjectIsNotFailedToCollectAmount();
+    error CantStakeWithoutRef();
+    error CantRefToYourself();
+    error RefererIsNoStaker();
+    error ProjectCollectCompleted();
 }
