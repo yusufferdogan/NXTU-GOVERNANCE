@@ -14,10 +14,18 @@ async function main() {
   // manually to make sure everything is compiled
   // await hre.run('compile');
 
+  //eslint-disable-next-line
+  const TOKEN_ADDRESS = '0x26f15017176D7EEF0062d057533A610b803c39B3';
+  //eslint-disable-next-line
+  const GOVERNANCE_ADDRESS = '0x6066D7184434D83f3F77ae1a52E6ED97144B1137';
+  //eslint-disable-next-line
+  const STAKE_ADDRESS = '0x677887482b33264d5D3a484E1Ca5951372a3e061';
+
   // We get the contract to deploy
-  const TokenName: string = 'Token';
+  const TokenName: string = 'Stake';
   const constructorArgs: Array<string | number | Array<string | number>> = [
-    '100000000000000',
+    TOKEN_ADDRESS,
+    GOVERNANCE_ADDRESS,
   ];
   const factory: ContractFactory = await ethers.getContractFactory(TokenName);
   const contract: Contract = await factory.deploy(...constructorArgs);
