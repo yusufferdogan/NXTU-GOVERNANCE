@@ -22,9 +22,6 @@ contract Governance is AccessControl, IGovernanceError, Pausable {
     uint256 public amountToApply = 500 * 10**8;
 
     struct Project {
-        string name;
-        string description;
-        string url;
         uint256 apr;
         //unstakeTimeStamp = voteEndDate + lockedTime
         uint256 lockedTime;
@@ -32,6 +29,8 @@ contract Governance is AccessControl, IGovernanceError, Pausable {
         uint256 votedFor;
         uint256 votedAgainst;
         uint256 stakeEndDate;
+        uint256 refPercantage;
+        uint256 amountToBeCollect;
         bool applied;
         bool approved;
     }
@@ -68,18 +67,39 @@ contract Governance is AccessControl, IGovernanceError, Pausable {
         returns (
             uint256 apr,
             uint256 lockedTime,
-            uint256 stakeEndDate
+            uint256 stakeEndDate,
+            uint256 amountToBeCollect
         )
     {
         Project memory project = projects[projectId];
         apr = project.apr;
         lockedTime = project.lockedTime;
         stakeEndDate = project.stakeEndDate;
+        amountToBeCollect = project.amountToBeCollect;
+    }
+
+    function getProjectRefPercantage(uint256 projectId)
+        external
+        view
+        returns (uint256)
+    {
+        return projects[projectId].refPercantage;
+    }
+
+    function getProjectCollectData(uint256 projectId)
+        external
+        view
+        returns (uint256 stakeEndDate, uint256 amountToBeCollect)
+    {
+        Project memory project = projects[projectId];
+        stakeEndDate = project.stakeEndDate;
+        amountToBeCollect = project.amountToBeCollect;
     }
 
     // apply your project via burning tokens
     function applyProject() external {
-        projects[++projectCount].applied = true;
+        Project storage project = projects[++projectCount];
+        project.applied = true;
         token.burnFrom(msg.sender, amountToApply);
         emit ProjectApplied(projectCount);
     }
@@ -87,39 +107,34 @@ contract Governance is AccessControl, IGovernanceError, Pausable {
     //owner approves the applied projects
     function approveProject(
         uint256 projectId,
-        string calldata _name,
-        string calldata _description,
-        string calldata _url,
         uint256 _apr,
         uint256 _lockedTime,
         uint256 _voteEndDate,
-        uint256 _stakeEndDate
+        uint256 _stakeEndDate,
+        uint256 _refPercantage,
+        uint256 _amountToBeCollect
     ) external onlyRole(APPROVER_ROLE) {
-        if (!projects[projectId].applied) revert DidNotApplied();
-        if (projects[projectId].approved) revert AlreadyApproved();
+        Project storage project = projects[projectId];
 
-        projects[projectId] = Project({
-            name: _name,
-            description: _description,
-            url: _url,
-            apr: _apr,
-            lockedTime: _lockedTime,
-            votedFor: 0,
-            votedAgainst: 0,
-            applied: true,
-            approved: true,
-            stakeEndDate: _stakeEndDate,
-            voteEndDate: _voteEndDate
-        });
+        if (!project.applied) revert DidNotApplied();
+        if (project.approved) revert AlreadyApproved();
+
+        project.apr = _apr;
+        project.lockedTime = _lockedTime;
+        project.approved = true;
+        project.stakeEndDate = _stakeEndDate;
+        project.voteEndDate = _voteEndDate;
+        project.refPercantage = _refPercantage;
+        project.amountToBeCollect = _amountToBeCollect;
+
         emit ProjectApproved(
             projectId,
-            _name,
-            _description,
-            _url,
             _apr,
             _lockedTime,
             _voteEndDate,
-            _stakeEndDate
+            _stakeEndDate,
+            _refPercantage,
+            _amountToBeCollect
         );
     }
 
@@ -127,12 +142,10 @@ contract Governance is AccessControl, IGovernanceError, Pausable {
     // voteFor = true else false
     // projectId specifies the projectID
     // amount can be any amount which is more than or equal to minVoteAmount
-    function voteProject(
-        uint256 projectId,
-        bool voteFor,
-        uint256 amount
-    ) external whenNotPaused {
-        if (amount < minAmountToVote) revert LessThanMinAmount();
+    function voteProject(uint256 projectId, bool voteFor)
+        external
+        whenNotPaused
+    {
         if (isVoted[msg.sender][projectId]) revert AlreadyVoted();
         if (!projects[projectId].approved) revert NotApproved();
         if (block.timestamp > projects[projectId].voteEndDate)
@@ -146,7 +159,7 @@ contract Governance is AccessControl, IGovernanceError, Pausable {
 
         emit ProjectVoted(projectId, msg.sender, voteFor);
 
-        token.burnFrom(msg.sender, amount);
+        token.burnFrom(msg.sender, minAmountToVote);
     }
 
     function setMinAmountToVote(uint256 amount)
