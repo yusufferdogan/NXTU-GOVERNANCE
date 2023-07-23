@@ -55,10 +55,15 @@ const config: HardhatUserConfig = {
       accounts: [`0x${process.env.DEPLOYER_WALLET_PRIVATE_KEY}`],
       chainId: 5,
     },
+    bscTestnet: {
+      url: String(process.env.BSC_TESTNET_RPC_URL),
+      accounts: [`0x${process.env.DEPLOYER_WALLET_PRIVATE_KEY}`],
+    },
   },
   etherscan: {
     apiKey: {
       goerli: process.env.ETHERSCAN_API_KEY || '',
+      bscTestnet: process.env.BSCSCAN_API_KEY || '',
     },
   },
   paths: {
