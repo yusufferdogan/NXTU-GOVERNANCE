@@ -315,7 +315,7 @@ describe(name, () => {
         .stake(1, depositAmount / 4, addresses[1].address)
     ).to.be.revertedWithCustomError(stake, 'RefererIsNoStaker');
 
-    for (let index = 0; index < 4; index++) {
+    for (let index = 0; index < 2; index++) {
       await expect(
         stake.connect(addresses[0]).stake(1, depositAmount / 4, owner.address)
       )
@@ -323,13 +323,33 @@ describe(name, () => {
         .withArgs(1, addresses[0].address, depositAmount / 4);
     }
 
+    for (let index = 0; index < 2; index++) {
+      await expect(stake.stake(1, depositAmount / 4, owner.address))
+        .to.emit(stake, 'Staked')
+        .withArgs(1, owner.address, depositAmount / 4);
+    }
+
     await ethers.provider.send('evm_increaseTime', [365 * days + 1]);
 
-    for (let index = 0; index < 4; index++) {
+    for (let index = 0; index < 2; index++) {
       await expect(stake.connect(addresses[0]).unstake(1))
         .to.emit(stake, 'Unstaked')
         .withArgs(1, addresses[0].address, ((depositAmount / 4) * 124) / 100);
     }
+
+    await expect(stake.unstake(1))
+      .to.emit(stake, 'Unstaked')
+      .withArgs(
+        1,
+        owner.address,
+        ((depositAmount / 4) * 124) / 100 +
+          //ref gain
+          2 * (((depositAmount / 4) * 10) / 100)
+      );
+
+    await expect(stake.unstake(1))
+      .to.emit(stake, 'Unstaked')
+      .withArgs(1, owner.address, ((depositAmount / 4) * 124) / 100);
 
     await ethers.provider.send('evm_increaseTime', [-375 * days - 2]);
   });
