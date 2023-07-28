@@ -26,4 +26,6 @@ interface IGovernanceError {
         address indexed user,
         bool votedFor
     );
+    event AmountToApplyChanged(uint256 amount);
+    event MinAmountToVoteChanged(uint256 amount);
 }

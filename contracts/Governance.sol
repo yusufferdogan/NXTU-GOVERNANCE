@@ -167,6 +167,7 @@ contract Governance is AccessControl, IGovernanceError, Pausable {
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         minAmountToVote = amount;
+        emit MinAmountToVoteChanged(amount);
     }
 
     function setAmountToApply(uint256 amount)
@@ -174,6 +175,7 @@ contract Governance is AccessControl, IGovernanceError, Pausable {
         onlyRole(DEFAULT_ADMIN_ROLE)
     {
         amountToApply = amount;
+        emit AmountToApplyChanged(amount);
     }
 
     function pause() public onlyRole(PAUSER_ROLE) {
