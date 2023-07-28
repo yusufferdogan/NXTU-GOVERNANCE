@@ -19,6 +19,7 @@ contract Stake is IStake, Ownable, Pausable {
         // queue structure
         uint256 front;
         Deposit[] deposits;
+        uint256 refReward;
     }
 
     //user => project => userData
@@ -123,8 +124,7 @@ contract Stake is IStake, Ownable, Pausable {
         emit Staked(_projectId, msg.sender, _amount);
 
         if (refPercantage != 0) {
-            bool _success = token.transfer(referers[msg.sender], refReward);
-            if (!_success) revert TransferError();
+            userData[referers[msg.sender]][_projectId].refReward += refReward;
         }
 
         bool success = token.transferFrom(msg.sender, address(this), _amount);
@@ -146,8 +146,10 @@ contract Stake is IStake, Ownable, Pausable {
             revert StakeIsLocked();
 
         uint256 withdrawAmount = unstakedDeposit.amount +
-            unstakedDeposit.reward;
+            unstakedDeposit.reward +
+            user.refReward;
 
+        user.refReward = 0;
         delete user.deposits[user.front];
         user.front++;
 
